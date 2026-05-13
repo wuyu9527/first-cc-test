@@ -8,6 +8,7 @@ import com.enterprise.module.auth.dto.LoginResponse;
 import com.enterprise.module.role.entity.Role;
 import com.enterprise.module.role.entity.UserRole;
 import com.enterprise.module.role.repository.UserRoleRepository;
+import com.enterprise.module.user.dto.UserDto;
 import com.enterprise.module.user.entity.User;
 import com.enterprise.module.user.repository.UserRepository;
 import io.jsonwebtoken.Claims;
@@ -82,5 +83,27 @@ public class AuthService {
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
 
         return LoginResponse.of(newAccessToken, newRefreshToken, accessExpiration);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto me(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Set<String> roles = userRoleRepository.findByUserIdWithRoles(userId)
+                .map(ur -> ur.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
+                .orElse(Set.of());
+
+        return new UserDto(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getStatus().name(),
+                roles,
+                user.getLastLoginAt(),
+                user.getCreatedAt(),
+                user.getUpdatedAt()
+        );
     }
 }
