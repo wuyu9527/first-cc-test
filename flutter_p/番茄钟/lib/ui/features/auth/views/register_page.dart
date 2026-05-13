@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../ui/core/theme/app_theme.dart';
 import '../view_models/auth_view_model.dart';
 
 /// 注册页面
-class RegisterPage extends StatefulWidget {
+class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  ConsumerState<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
+class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -34,15 +34,14 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final vm = context.read<AuthViewModel>();
-    final success = await vm.register(
-      _usernameController.text.trim(),
-      _emailController.text.trim(),
-      _passwordController.text,
-      _phoneController.text.trim().isEmpty
-          ? null
-          : _phoneController.text.trim(),
-    );
+    final success = await ref.read(authProvider.notifier).register(
+          _usernameController.text.trim(),
+          _emailController.text.trim(),
+          _passwordController.text,
+          _phoneController.text.trim().isEmpty
+              ? null
+              : _phoneController.text.trim(),
+        );
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -54,6 +53,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('注册账号')),
       body: SafeArea(
@@ -64,7 +65,6 @@ class _RegisterPageState extends State<RegisterPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 用户名
                 TextFormField(
                   controller: _usernameController,
                   decoration: const InputDecoration(
@@ -80,8 +80,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-
-                // 邮箱
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -98,8 +96,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-
-                // 密码
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -123,8 +119,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-
-                // 确认密码
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirm,
@@ -148,8 +142,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-
-                // 手机号（可选）
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
@@ -163,62 +155,51 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 24),
 
                 // 错误提示
-                Consumer<AuthViewModel>(
-                  builder: (_, vm, __) {
-                    if (vm.errorMessage == null) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryRed.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline,
-                                color: AppTheme.primaryRed, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                vm.errorMessage!,
-                                style: const TextStyle(
-                                    color: AppTheme.primaryRed, fontSize: 14),
-                              ),
-                            ),
-                          ],
-                        ),
+                if (authState.errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryRed.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                  },
-                ),
-
-                // 注册按钮
-                Consumer<AuthViewModel>(
-                  builder: (_, vm, __) => ElevatedButton(
-                    onPressed: vm.isLoading ? null : _handleRegister,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryRed,
-                      foregroundColor: Colors.white,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: AppTheme.primaryRed, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(authState.errorMessage!,
+                                style: const TextStyle(
+                                    color: AppTheme.primaryRed, fontSize: 14)),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: vm.isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('注 册'),
                   ),
+
+                ElevatedButton(
+                  onPressed: authState.status == AuthStatus.loading
+                      ? null
+                      : _handleRegister,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryRed,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: authState.status == AuthStatus.loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('注 册'),
                 ),
                 const SizedBox(height: 12),
-
-                // 返回登录
                 TextButton(
                   onPressed: () {
-                    context.read<AuthViewModel>().clearError();
+                    ref.read(authProvider.notifier).clearError();
                     Navigator.pop(context);
                   },
                   child: const Text('已有账号？返回登录'),

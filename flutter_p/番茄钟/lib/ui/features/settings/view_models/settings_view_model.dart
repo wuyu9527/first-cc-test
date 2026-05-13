@@ -1,71 +1,69 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../data/repositories/settings_repository.dart';
 import '../../../../domain/models/timer_settings.dart';
 
-/// 设置页面 ViewModel
-class SettingsViewmodel extends ChangeNotifier {
-  SettingsViewmodel({required SettingsRepository settingsRepository})
-      : _settingsRepository = settingsRepository;
+/// 设置 UI 状态
+class SettingsUiState {
+  final TimerSettings settings;
+  final bool isLoading;
 
-  final SettingsRepository _settingsRepository;
+  const SettingsUiState({
+    this.settings = const TimerSettings(),
+    this.isLoading = false,
+  });
 
-  TimerSettings _settings = const TimerSettings();
-  bool _isLoading = false;
-
-  TimerSettings get settings => _settings;
-  bool get isLoading => _isLoading;
-
-  /// 加载设置
-  Future<void> loadSettings() async {
-    _isLoading = true;
-    notifyListeners();
-
-    _settings = await _settingsRepository.loadSettings();
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  /// 更新专注时长
-  Future<void> setFocusDuration(int minutes) async {
-    _settings = _settings.copyWith(focusDurationMinutes: minutes);
-    await _save();
-  }
-
-  /// 更新短休息时长
-  Future<void> setShortBreakDuration(int minutes) async {
-    _settings = _settings.copyWith(shortBreakDurationMinutes: minutes);
-    await _save();
-  }
-
-  /// 更新长休息时长
-  Future<void> setLongBreakDuration(int minutes) async {
-    _settings = _settings.copyWith(longBreakDurationMinutes: minutes);
-    await _save();
-  }
-
-  /// 更新长休息间隔
-  Future<void> setSessionsBeforeLongBreak(int count) async {
-    _settings = _settings.copyWith(sessionsBeforeLongBreak: count);
-    await _save();
-  }
-
-  /// 切换音效
-  Future<void> toggleSound() async {
-    _settings = _settings.copyWith(soundEnabled: !_settings.soundEnabled);
-    await _save();
-  }
-
-  /// 切换通知
-  Future<void> toggleNotification() async {
-    _settings = _settings.copyWith(
-      notificationEnabled: !_settings.notificationEnabled,
+  SettingsUiState copyWith({TimerSettings? settings, bool? isLoading}) {
+    return SettingsUiState(
+      settings: settings ?? this.settings,
+      isLoading: isLoading ?? this.isLoading,
     );
-    await _save();
-  }
-
-  Future<void> _save() async {
-    await _settingsRepository.saveSettings(_settings);
-    notifyListeners();
   }
 }
+
+/// 设置状态管理
+class SettingsNotifier extends Notifier<SettingsUiState> {
+  @override
+  SettingsUiState build() => const SettingsUiState();
+
+  SettingsRepository get _repo => ref.read(settingsRepositoryProvider);
+
+  Future<void> loadSettings() async {
+    state = state.copyWith(isLoading: true);
+    final settings = await _repo.loadSettings();
+    state = state.copyWith(settings: settings, isLoading: false);
+  }
+
+  Future<void> setFocusDuration(int minutes) => _update(
+        state.settings.copyWith(focusDurationMinutes: minutes),
+      );
+
+  Future<void> setShortBreakDuration(int minutes) => _update(
+        state.settings.copyWith(shortBreakDurationMinutes: minutes),
+      );
+
+  Future<void> setLongBreakDuration(int minutes) => _update(
+        state.settings.copyWith(longBreakDurationMinutes: minutes),
+      );
+
+  Future<void> setSessionsBeforeLongBreak(int count) => _update(
+        state.settings.copyWith(sessionsBeforeLongBreak: count),
+      );
+
+  Future<void> toggleSound() => _update(
+        state.settings.copyWith(soundEnabled: !state.settings.soundEnabled),
+      );
+
+  Future<void> toggleNotification() => _update(
+        state.settings.copyWith(
+            notificationEnabled: !state.settings.notificationEnabled),
+      );
+
+  Future<void> _update(TimerSettings newSettings) async {
+    await _repo.saveSettings(newSettings);
+    state = state.copyWith(settings: newSettings);
+  }
+}
+
+/// Provider: 设置状态
+final settingsProvider =
+    NotifierProvider<SettingsNotifier, SettingsUiState>(SettingsNotifier.new);

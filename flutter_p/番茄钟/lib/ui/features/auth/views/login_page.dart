@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../ui/core/theme/app_theme.dart';
 import '../view_models/auth_view_model.dart';
 import 'register_page.dart';
 
 /// 登录页面
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -27,16 +27,16 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-
-    final vm = context.read<AuthViewModel>();
-    await vm.login(
-      _usernameController.text.trim(),
-      _passwordController.text,
-    );
+    await ref.read(authProvider.notifier).login(
+          _usernameController.text.trim(),
+          _passwordController.text,
+        );
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -48,12 +48,7 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Logo / 标题
-                  const Icon(
-                    Icons.timer,
-                    size: 64,
-                    color: AppTheme.primaryRed,
-                  ),
+                  const Icon(Icons.timer, size: 64, color: AppTheme.primaryRed),
                   const SizedBox(height: 16),
                   Text(
                     '番茄钟',
@@ -108,67 +103,56 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 24),
 
                   // 错误提示
-                  Consumer<AuthViewModel>(
-                    builder: (_, vm, __) {
-                      if (vm.errorMessage == null) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryRed.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline,
-                                  color: AppTheme.primaryRed, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  vm.errorMessage!,
-                                  style: const TextStyle(
-                                      color: AppTheme.primaryRed, fontSize: 14),
-                                ),
-                              ),
-                            ],
-                          ),
+                  if (authState.errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryRed.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      );
-                    },
-                  ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: AppTheme.primaryRed, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(authState.errorMessage!,
+                                  style: const TextStyle(
+                                      color: AppTheme.primaryRed, fontSize: 14)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
                   // 登录按钮
-                  Consumer<AuthViewModel>(
-                    builder: (_, vm, __) => ElevatedButton(
-                      onPressed: vm.isLoading ? null : _handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryRed,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: vm.isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('登 录'),
+                  ElevatedButton(
+                    onPressed: authState.status == AuthStatus.loading
+                        ? null
+                        : _handleLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryRed,
+                      foregroundColor: Colors.white,
                     ),
+                    child: authState.status == AuthStatus.loading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('登 录'),
                   ),
                   const SizedBox(height: 16),
 
                   // 注册入口
                   TextButton(
                     onPressed: () {
-                      context.read<AuthViewModel>().clearError();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const RegisterPage()),
-                      );
+                      ref.read(authProvider.notifier).clearError();
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const RegisterPage()));
                     },
                     child: const Text('没有账号？立即注册'),
                   ),

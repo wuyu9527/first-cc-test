@@ -1,53 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../domain/models/timer_state.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/circular_timer_progress.dart';
 import '../view_models/timer_view_model.dart';
 
 /// 番茄钟主页面
-class TimerPage extends StatelessWidget {
-  const TimerPage({super.key, required this.viewModel});
-
-  final TimerViewmodel viewModel;
+class TimerPage extends ConsumerWidget {
+  const TimerPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: viewModel,
-      builder: (context, _) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('番茄钟'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () =>
-                    Navigator.pushNamed(context, '/settings'),
-              ),
-            ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final uiState = ref.watch(timerProvider);
+    final notifier = ref.read(timerProvider.notifier);
+
+    // 确保已初始化
+    ref.listen(timerProvider, (_, __) {});
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('番茄钟'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.pushNamed(context, '/settings'),
           ),
-          body: SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                _buildTodayProgress(context),
-                const SizedBox(height: 48),
-                _buildTimerRing(context),
-                const SizedBox(height: 48),
-                _buildControlButtons(context),
-                const Spacer(),
-                _buildSessionTypeSelector(context),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        );
-      },
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 24),
+            _buildTodayProgress(context, uiState.todayFocusCount),
+            const SizedBox(height: 48),
+            _buildTimerRing(context, uiState, notifier),
+            const SizedBox(height: 48),
+            _buildControlButtons(context, uiState, notifier),
+            const Spacer(),
+            _buildSessionTypeSelector(context, uiState, notifier),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildTodayProgress(BuildContext context) {
-    final vm = viewModel;
+  Widget _buildTodayProgress(BuildContext context, int todayFocusCount) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
@@ -55,7 +53,7 @@ class TimerPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        '今日已完成 ${vm.todayFocusCount} 个番茄钟',
+        '今日已完成 $todayFocusCount 个番茄钟',
         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: AppTheme.primaryRed,
               fontWeight: FontWeight.w500,
@@ -64,10 +62,11 @@ class TimerPage extends StatelessWidget {
     );
   }
 
-  Widget _buildTimerRing(BuildContext context) {
-    final vm = viewModel;
-    final state = vm.timerState;
-    final isRunning = vm.isRunning || vm.isPaused;
+  Widget _buildTimerRing(
+      BuildContext context, TimerUiState uiState, TimerNotifier notifier) {
+    final state = uiState.timerState;
+    final isRunning =
+        state.status == TimerStatus.running || state.status == TimerStatus.paused;
 
     Color ringColor;
     String statusText;
@@ -85,17 +84,16 @@ class TimerPage extends StatelessWidget {
     return CircularTimerProgress(
       progress: state.progress,
       remainingText: state.formattedRemaining,
-      statusText: vm.isPaused ? '已暂停' : statusText,
+      statusText: state.status == TimerStatus.paused ? '已暂停' : statusText,
       color: ringColor,
     );
   }
 
-  Widget _buildControlButtons(BuildContext context) {
-    final vm = viewModel;
-
-    if (vm.isIdle) {
+  Widget _buildControlButtons(
+      BuildContext context, TimerUiState uiState, TimerNotifier notifier) {
+    if (uiState.timerState.status == TimerStatus.idle) {
       return ElevatedButton.icon(
-        onPressed: () => vm.start(),
+        onPressed: () => notifier.start(),
         icon: const Icon(Icons.play_arrow, size: 28),
         label: const Text('开始专注'),
         style: ElevatedButton.styleFrom(
@@ -109,34 +107,22 @@ class TimerPage extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (vm.isRunning)
-          _buildSmallButton(
-            context,
-            icon: Icons.pause,
-            label: '暂停',
-            onTap: () => vm.pause(),
-          )
+        if (uiState.timerState.status == TimerStatus.running)
+          _buildSmallButton(context,
+              icon: Icons.pause, label: '暂停', onTap: () => notifier.pause())
         else
-          _buildSmallButton(
-            context,
-            icon: Icons.play_arrow,
-            label: '继续',
-            onTap: () => vm.start(),
-          ),
+          _buildSmallButton(context,
+              icon: Icons.play_arrow,
+              label: '继续',
+              onTap: () => notifier.start()),
         const SizedBox(width: 16),
-        _buildSmallButton(
-          context,
-          icon: Icons.stop,
-          label: '重置',
-          onTap: () => vm.reset(),
-        ),
+        _buildSmallButton(context,
+            icon: Icons.stop, label: '重置', onTap: () => notifier.reset()),
         const SizedBox(width: 16),
-        _buildSmallButton(
-          context,
-          icon: Icons.skip_next,
-          label: '跳过',
-          onTap: () => vm.skip(),
-        ),
+        _buildSmallButton(context,
+            icon: Icons.skip_next,
+            label: '跳过',
+            onTap: () => notifier.skip()),
       ],
     );
   }
@@ -151,12 +137,10 @@ class TimerPage extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 28,
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: IconButton(
-            icon: Icon(icon),
-            onPressed: onTap,
-            color: AppTheme.textPrimary,
-          ),
+          backgroundColor:
+              Theme.of(context).colorScheme.surfaceContainerHighest,
+          child:
+              IconButton(icon: Icon(icon), onPressed: onTap, color: AppTheme.textPrimary),
         ),
         const SizedBox(height: 6),
         Text(label, style: Theme.of(context).textTheme.bodyMedium),
@@ -164,15 +148,14 @@ class TimerPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSessionTypeSelector(BuildContext context) {
-    final vm = viewModel;
-    final state = vm.timerState;
+  Widget _buildSessionTypeSelector(
+      BuildContext context, TimerUiState uiState, TimerNotifier notifier) {
+    final state = uiState.timerState;
+    final isRunning =
+        state.status == TimerStatus.running || state.status == TimerStatus.paused;
     final isBreak = state.sessionType != SessionType.focus;
 
-    // 仅在空闲时显示切换
-    if (vm.isRunning || vm.isPaused || isBreak) {
-      return const SizedBox.shrink();
-    }
+    if (isRunning || isBreak) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -182,7 +165,7 @@ class TimerPage extends StatelessWidget {
           _buildTypeChip(
             context,
             icon: Icons.timer,
-            label: '专注 ${vm.settings.focusDurationMinutes}min',
+            label: '专注 ${uiState.settings.focusDurationMinutes}min',
             isActive: true,
             color: AppTheme.primaryRed,
           ),
@@ -197,31 +180,27 @@ class TimerPage extends StatelessWidget {
     required String label,
     required bool isActive,
     required Color color,
-    VoidCallback? onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isActive ? color : color.withAlpha(25),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: isActive ? Colors.white : color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? Colors.white : color,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isActive ? color : color.withAlpha(25),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: isActive ? Colors.white : color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: isActive ? Colors.white : color,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
